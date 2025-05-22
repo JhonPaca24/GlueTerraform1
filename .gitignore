@@ -1,0 +1,21 @@
+# Terraform state and sensitive files
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
+.crash
+*.log
+*.bak
+*.backup
+
+# Local env
+*.env
+.envrc
+
+# IDEs y sistema
+.vscode/
+.idea/
+.DS_Store
+
+# Archivos CSV u otros datos sensibles
+*.csv
