@@ -79,6 +79,43 @@ resource "aws_iam_role_policy" "glue_crawler_policy" {
   })
 }
 
+resource "aws_iam_role" "glue_service_role" {
+  name = "glue_service_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "glue.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "glue_service_policy" {
+  name = "glue_service_policy"
+  role = aws_iam_role.glue_service_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:*",
+          "glue:*",
+          "logs:*"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 ###############################
 # 4. Crawler
 ###############################
@@ -110,4 +147,45 @@ resource "aws_s3_object" "clientes_csv" {
   etag   = filemd5("${path.module}/${var.csv_file_name}")
   content_type = "text/csv"
 }
+
+###############################
+# 6. glue job 
+###############################
+
+resource "aws_glue_job" "transformar_clientes" {
+  name     = "job-transformar-clientes"
+  role_arn = aws_iam_role.glue_service_role.arn
+  glue_version = "4.0"
+  number_of_workers = 2
+  worker_type       = "G.1X"
+  max_retries       = 0
+
+  command {
+    name            = "glueetl"
+    script_location = "s3://${aws_s3_bucket.datos_csv.bucket}/scripts/transform_clientes.py"
+    python_version  = "3"
+  }
+
+  default_arguments = {
+    "--job-language"           = "python"
+    "--TempDir"                = "s3://${aws_s3_bucket.datos_csv.bucket}/tmp/"
+    "--class"                  = "GlueApp"
+    "--enable-continuous-cloudwatch-log" = "true"
+    "--enable-metrics"         = "true"
+    "--source_path"            = "s3://${aws_s3_bucket.datos_csv.bucket}/clientes/"
+    "--destination_path"       = "s3://${aws_s3_bucket.datos_csv.bucket}/salida_clientes/"
+  }
+}
+
+################################
+# 7. crear el bucket destino
+################################
+
+resource "aws_s3_object" "glue_script" {
+  bucket = aws_s3_bucket.datos_csv.id
+  key    = "scripts/transform_clientes.py"
+  source = "${path.module}/transform_clientes.py"
+  etag   = filemd5("${path.module}/transform_clientes.py")
+}
+
 
